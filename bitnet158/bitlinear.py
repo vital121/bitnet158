@@ -3,6 +3,42 @@ import torch.nn as nn
 
 
 class BitLinear(nn.Linear):
+    """
+    A custom linear layer that implements weight binarization and optional activation quantization to enable more
+    efficient computation, particularly suited for deployment on hardware that benefits from quantized computations.
+
+    This layer extends the standard `nn.Linear` layer by binarizing weights to 1 bit and optionally quantizing
+    activations to a specified bit-width.
+
+    Parameters:
+        in_features (int): Size of each input sample.
+        out_features (int): Size of each output sample.
+        bias (bool, optional): If set to False, the layer will not learn an additive bias. Default: True.
+        dtype (torch.dtype, optional): Data type of the weights. Default is torch.bfloat16 for efficient computation.
+        num_groups (int, optional): The number of groups for dividing the weights and activations during quantization,
+                                    allowing for group-wise quantization. Default: 1.
+
+    Attributes:
+        quantized_weights (torch.Tensor): The buffer that stores quantized weights in 1-bit format.
+        dtype (torch.dtype): The data type to which weights are cast during dequantization for computation.
+        num_groups (int): The number of groups for group-wise weight binarization and activation quantization.
+        eps (float): A small epsilon value to prevent division by zero during activation quantization.
+
+    Methods:
+        weight (property): Overrides the `weight` property to return dequantized weights for computation.
+        dequantize_weights (self): Converts the quantized weights back to the specified dtype and computes the scaling
+                                   factor (alpha) for the weights.
+        ste_binarize (self, x): Applies the Straight Through Estimator (STE) method to binarize inputs while preserving
+                                gradients during backpropagation.
+        binarize_weights_groupwise (self): Performs group-wise binarization of weights using STE.
+        quantize_activations_groupwise (self, x, b=8): Quantizes activations group-wise to a specified bit-width.
+
+    Example:
+        >>> layer = BitLinear(512, 512, bias=True, dtype=torch.bfloat16, num_groups=4)
+        >>> input = torch.randn(10, 512)
+        >>> output = layer(input)
+        The output tensor will have gone through binarized weight multiplication and optionally quantized activations.
+    """
     def __init__(self, in_features, out_features, bias=True, dtype=None, num_groups=1):
         super(BitLinear, self).__init__(in_features, out_features, bias)
         self.dtype = dtype if dtype is not None else torch.bfloat16
